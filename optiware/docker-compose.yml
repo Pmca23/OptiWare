@@ -1,0 +1,277 @@
+name: optiware
+
+# Credenciais abaixo são de DESENVOLVIMENTO. Em produção usar secrets / ficheiro .env fora do Git.
+x-amqp: &amqp "amqp://guest:guest@rabbitmq1:5672,amqp://guest:guest@rabbitmq2:5672,amqp://guest:guest@rabbitmq3:5672"
+
+x-common-env: &common-env
+  JWT_SECRET: dev-jwt-secret-change-me
+  SERVICE_KEY: dev-service-key-change-me
+  AMQP_URL: *amqp
+  POSTGRES_PASSWORD: postgres
+
+x-api: &api
+  build: ./app
+  image: optiware-app
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://localhost:3000/live"]
+    interval: 3s
+    timeout: 2s
+    retries: 3
+    start_period: 10s
+
+x-central-env: &central-env
+  <<: *common-env
+  ROLE: central
+  PG_HOSTS: "central-db1,central-db2"
+  PG_DB: optiware_central
+
+x-wh1-env: &wh1-env
+  <<: *common-env
+  ROLE: warehouse
+  WAREHOUSE_ID: wh1
+  WAREHOUSE_NAME: "Armazém Lisboa"
+  SELF_URL: "http://gateway:9001"          # endereço estável (passa pelo gateway)
+  CENTRAL_URLS: "http://gateway:8080"
+  PG_HOSTS: "wh1-db1,wh1-db2"
+  PG_DB: optiware_wh
+  SEED_STOCK: "1"
+
+x-wh2-env: &wh2-env
+  <<: *common-env
+  ROLE: warehouse
+  WAREHOUSE_ID: wh2
+  WAREHOUSE_NAME: "Armazém Setúbal"
+  SELF_URL: "http://gateway:9002"
+  CENTRAL_URLS: "http://gateway:8080"
+  PG_HOSTS: "wh2-db1,wh2-db2"
+  PG_DB: optiware_wh
+
+x-ha-db: &ha-db
+  build: ./db
+  image: optiware-pg-ha
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
+    interval: 3s
+    timeout: 3s
+    retries: 15
+    start_period: 5s
+
+x-watchdog: &watchdog
+  image: postgres:16
+  restart: unless-stopped
+  entrypoint: ["bash", "/watchdog.sh"]
+  volumes: ["./db/watchdog.sh:/watchdog.sh:ro"]
+
+x-rabbit: &rabbit
+  image: rabbitmq:3.13-management
+  restart: unless-stopped
+  environment: &rabbit-env
+    RABBITMQ_ERLANG_COOKIE: optiware-dev-cookie
+  volumes: ["./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro"]
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+    interval: 5s
+    timeout: 10s
+    retries: 12
+    start_period: 20s
+
+services:
+  # ===================== MENSAGENS: cluster RabbitMQ de 3 nós (quorum queues) =====================
+  rabbitmq1:
+    <<: *rabbit
+    hostname: rabbitmq1
+    environment: { <<: *rabbit-env, RABBITMQ_NODENAME: rabbit@rabbitmq1 }
+    volumes: ["./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro", "rabbitmq1-data:/var/lib/rabbitmq"]
+    ports: ["15672:15672"]          # consola de gestão (guest/guest)
+    networks: [frontend]
+  rabbitmq2:
+    <<: *rabbit
+    hostname: rabbitmq2
+    depends_on:
+      rabbitmq1: { condition: service_healthy }
+    environment: { <<: *rabbit-env, RABBITMQ_NODENAME: rabbit@rabbitmq2 }
+    volumes: ["./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro", "rabbitmq2-data:/var/lib/rabbitmq"]
+    networks: [frontend]
+  rabbitmq3:
+    <<: *rabbit
+    hostname: rabbitmq3
+    depends_on:
+      rabbitmq1: { condition: service_healthy }
+    environment: { <<: *rabbit-env, RABBITMQ_NODENAME: rabbit@rabbitmq3 }
+    volumes: ["./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro", "rabbitmq3-data:/var/lib/rabbitmq"]
+    networks: [frontend]
+
+  # ===================== SERVIÇOS CENTRAIS =====================
+  # BD central: primário + standby (streaming replication) + watchdog de failover
+  central-db1:
+    <<: *ha-db
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_central, REPL_PASSWORD: repl-secret, PEERS: central-db2, INITIAL_ROLE: primary }
+    volumes: [central-db1-data:/var/lib/postgresql/data]
+    networks: [central-net]
+  central-db2:
+    <<: *ha-db
+    depends_on:
+      central-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_central, REPL_PASSWORD: repl-secret, PEERS: central-db1, INITIAL_ROLE: standby }
+    volumes: [central-db2-data:/var/lib/postgresql/data]
+    networks: [central-net]
+  central-watchdog:
+    <<: *watchdog
+    depends_on:
+      central-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, HOSTS: "central-db1 central-db2", THRESHOLD: "3" }
+    networks: [central-net]
+
+  # 2 instâncias da API central (IPs fixos para o gateway)
+  central-api1:
+    <<: *api
+    depends_on:
+      central-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *central-env, INSTANCE_ID: central-api1 }
+    networks:
+      central-net: {}
+      frontend: { ipv4_address: 172.28.0.11 }
+  central-api2:
+    <<: *api
+    depends_on:
+      central-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *central-env, INSTANCE_ID: central-api2 }
+    networks:
+      central-net: {}
+      frontend: { ipv4_address: 172.28.0.12 }
+
+  # ===================== ARMAZÉM 1: 2 APIs + BD primário/standby (rede isolada wh1-net) =====================
+  wh1-db1:
+    <<: *ha-db
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_wh, REPL_PASSWORD: repl-secret, PEERS: wh1-db2, INITIAL_ROLE: primary }
+    volumes: [wh1-db1-data:/var/lib/postgresql/data]
+    networks: [wh1-net]
+  wh1-db2:
+    <<: *ha-db
+    depends_on:
+      wh1-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_wh, REPL_PASSWORD: repl-secret, PEERS: wh1-db1, INITIAL_ROLE: standby }
+    volumes: [wh1-db2-data:/var/lib/postgresql/data]
+    networks: [wh1-net]
+  wh1-watchdog:
+    <<: *watchdog
+    depends_on:
+      wh1-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, HOSTS: "wh1-db1 wh1-db2", THRESHOLD: "3" }
+    networks: [wh1-net]
+  wh1-api-a:
+    <<: *api
+    depends_on:
+      wh1-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *wh1-env, INSTANCE_ID: wh1-api-a }
+    networks:
+      wh1-net: {}
+      frontend: { ipv4_address: 172.28.0.21 }
+  wh1-api-b:
+    <<: *api
+    depends_on:
+      wh1-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *wh1-env, INSTANCE_ID: wh1-api-b }
+    networks:
+      wh1-net: {}
+      frontend: { ipv4_address: 172.28.0.22 }
+
+  # ===================== ARMAZÉM 2: 2 APIs + BD primário/standby (rede isolada wh2-net) =====================
+  wh2-db1:
+    <<: *ha-db
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_wh, REPL_PASSWORD: repl-secret, PEERS: wh2-db2, INITIAL_ROLE: primary }
+    volumes: [wh2-db1-data:/var/lib/postgresql/data]
+    networks: [wh2-net]
+  wh2-db2:
+    <<: *ha-db
+    depends_on:
+      wh2-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: optiware_wh, REPL_PASSWORD: repl-secret, PEERS: wh2-db1, INITIAL_ROLE: standby }
+    volumes: [wh2-db2-data:/var/lib/postgresql/data]
+    networks: [wh2-net]
+  wh2-watchdog:
+    <<: *watchdog
+    depends_on:
+      wh2-db1: { condition: service_healthy }
+    environment: { POSTGRES_PASSWORD: postgres, HOSTS: "wh2-db1 wh2-db2", THRESHOLD: "3" }
+    networks: [wh2-net]
+  wh2-api-a:
+    <<: *api
+    depends_on:
+      wh2-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *wh2-env, INSTANCE_ID: wh2-api-a }
+    networks:
+      wh2-net: {}
+      frontend: { ipv4_address: 172.28.0.31 }
+  wh2-api-b:
+    <<: *api
+    depends_on:
+      wh2-db1: { condition: service_healthy }
+      rabbitmq2: { condition: service_healthy }
+      rabbitmq3: { condition: service_healthy }
+    environment: { <<: *wh2-env, INSTANCE_ID: wh2-api-b }
+    networks:
+      wh2-net: {}
+      frontend: { ipv4_address: 172.28.0.32 }
+
+  # ===================== GATEWAY: endereços estáveis + 2 nginx redundantes =====================
+  # `gateway` é só o "dono" do endereço de rede e das portas (8000 interface web | 8080 central | 9001 wh1 | 9002 wh2).
+  # gateway-a e gateway-b (nginx) partilham esse endereço; se um cai, o outro continua a servir.
+  gateway:
+    image: alpine:3.20
+    restart: always
+    command: ["sleep", "infinity"]
+    ports: ["8000:8000", "8080:8080", "9001:9001", "9002:9002"]   # 8000 = interface web
+    networks: [frontend]
+  gateway-a:
+    image: nginx:1.27-alpine
+    restart: always
+    network_mode: "service:gateway"
+    depends_on: [gateway, central-api1, central-api2, wh1-api-a, wh1-api-b, wh2-api-a, wh2-api-b]
+    volumes:
+      - "./lb/gateway-a.conf:/etc/nginx/nginx.conf:ro"              # identidade deste nginx
+      - "./lb/gateway.conf:/etc/nginx/gateway-common.conf:ro"      # configuração comum aos dois
+      - "./ui:/usr/share/nginx/html:ro"                            # interface web (estática)
+  gateway-b:
+    image: nginx:1.27-alpine
+    restart: always
+    network_mode: "service:gateway"
+    depends_on: [gateway, central-api1, central-api2, wh1-api-a, wh1-api-b, wh2-api-a, wh2-api-b]
+    volumes:
+      - "./lb/gateway-b.conf:/etc/nginx/nginx.conf:ro"              # identidade deste nginx
+      - "./lb/gateway.conf:/etc/nginx/gateway-common.conf:ro"      # configuração comum aos dois
+      - "./ui:/usr/share/nginx/html:ro"                            # interface web (estática)
+
+  # Para adicionar um 3.º armazém: copiar o bloco do wh2 (BD primário+standby, watchdog, 2 APIs com IPs .41/.42),
+  # acrescentar o upstream, a porta, o `location /api/wh3/` e as instâncias (map + topology.json) no lb/gateway.conf,
+  # e a porta no serviço `gateway`. A interface mostra o novo armazém sozinha (lista vinda do central).
+
+networks:
+  frontend:
+    ipam: { config: [{ subnet: 172.28.0.0/24 }] }
+  central-net: {}
+  wh1-net: {}
+  wh2-net: {}
+
+volumes:
+  rabbitmq1-data:
+  rabbitmq2-data:
+  rabbitmq3-data:
+  central-db1-data:
+  central-db2-data:
+  wh1-db1-data:
+  wh1-db2-data:
+  wh2-db1-data:
+  wh2-db2-data:

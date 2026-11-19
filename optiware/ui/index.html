@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OptiWare</title>
+<style>
+@font-face { font-family: "Barlow"; font-weight: 400; font-display: swap; src: url("fonts/barlow-400.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url("fonts/barlow-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url("fonts/barlow-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-display: swap; src: url("fonts/barlow-condensed-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url("fonts/barlow-condensed-600.woff2") format("woff2"); }
+
+:root {
+  --floor: #E6E9EC;      /* betão do chão do armazém */
+  --paper: #FFFFFF;
+  --ink: #16202E;
+  --muted: #5A6675;
+  --line: #C9D0D8;
+  --mark: #F2B705;       /* amarelo das marcações de piso */
+  --rail: #152033;       /* painel de controlo */
+  --rail-2: #1E2C44;
+  --rail-ink: #E8EDF4;
+  --rail-muted: #93A1B6;
+  --ok: #2F9E5C;
+  --bad: #D4442F;
+  --warn: #C97F00;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --sign: "Barlow Condensed", "Arial Narrow", "Barlow", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--body); font-size: 16px; line-height: 1.45; color: var(--ink); background: var(--floor); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--mark); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ---------- cabeçalho ---------- */
+.top { background: var(--paper); border-bottom: 4px solid var(--mark); display: flex; align-items: stretch; gap: 28px; padding: 0 24px; flex-wrap: wrap; }
+.brand { font-family: var(--sign); font-weight: 600; font-size: 30px; letter-spacing: .01em; padding: 12px 0 10px; }
+.tabs { display: flex; align-items: flex-end; gap: 4px; flex: 1; flex-wrap: wrap; }
+.tab { border: 0; background: none; cursor: pointer; padding: 10px 16px 12px; font-family: var(--sign); font-weight: 500; font-size: 21px; color: var(--muted); border-bottom: 4px solid transparent; margin-bottom: -4px; }
+.tab small { font-family: var(--body); font-size: 13px; font-weight: 400; margin-left: 6px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tab .dot { margin-right: 7px; }
+.who { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--muted); }
+.who b { color: var(--ink); font-weight: 600; }
+
+/* ---------- estrutura ---------- */
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 384px; min-height: calc(100vh - 62px); }
+main { padding: 26px 28px 60px; min-width: 0; }
+h1 { font-family: var(--sign); font-weight: 600; font-size: 38px; line-height: 1.05; margin: 0 0 4px; }
+h2 { font-family: var(--sign); font-weight: 600; font-size: 24px; margin: 0 0 10px; }
+.lede { color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+.block { background: var(--paper); border: 1px solid var(--line); padding: 18px 20px 20px; margin-bottom: 18px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.pair > .block { margin-bottom: 18px; }
+.note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+
+.banner { border-left: 6px solid var(--bad); background: #FBE9E5; padding: 12px 16px; margin-bottom: 18px; }
+.banner.warn { border-color: var(--warn); background: #FBF1DC; }
+.banner b { display: block; }
+
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th { text-align: left; font-weight: 600; font-size: 13.5px; color: var(--muted); padding: 6px 10px 6px 0; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+.sku { font-weight: 600; white-space: nowrap; }
+.sub { display: block; color: var(--muted); font-size: 13px; }
+.empty { color: var(--muted); padding: 10px 0 2px; }
+.scroll { overflow-x: auto; }
+
+.badge { display: inline-block; padding: 1px 9px 2px; font-size: 13px; font-weight: 600; border: 1.5px solid currentColor; white-space: nowrap; }
+.b-ok { color: var(--ok); } .b-bad { color: var(--bad); } .b-warn { color: var(--warn); } .b-wait { color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--rail-muted); vertical-align: 0; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+
+/* ---------- formulários ---------- */
+form.row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+label { display: grid; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+input, select { border: 1.5px solid var(--line); background: var(--paper); padding: 8px 10px; min-height: 40px; color: var(--ink); }
+input[type="number"] { width: 110px; }
+.btn { border: 1.5px solid var(--ink); background: var(--ink); color: #fff; padding: 8px 16px; min-height: 40px; font-weight: 600; cursor: pointer; }
+.btn:hover { background: #26354A; }
+.btn.alt { background: var(--paper); color: var(--ink); }
+.btn.alt:hover { background: var(--floor); }
+.btn.small { min-height: 30px; padding: 3px 10px; font-size: 14px; }
+.btn:disabled { opacity: .5; cursor: progress; }
+.msg { margin: 12px 0 0; padding: 10px 12px; border-left: 5px solid var(--muted); background: var(--floor); font-size: 15px; }
+.msg.ok { border-color: var(--ok); } .msg.bad { border-color: var(--bad); } .msg.warn { border-color: var(--warn); }
+.msg ul { margin: 4px 0 0; padding-left: 18px; }
+.msg .btn { margin-top: 10px; }
+
+/* ---------- painel de infraestrutura (o elemento central da demonstração) ---------- */
+.rail { background: var(--rail); color: var(--rail-ink); padding: 22px 20px 40px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; }
+.rail h2 { font-size: 26px; margin-bottom: 2px; }
+.rail .lede { color: var(--rail-muted); font-size: 14px; margin-bottom: 18px; }
+.group { border-top: 1px solid #2C3C58; padding: 12px 0 14px; }
+.group h3 { font-family: var(--sign); font-weight: 600; font-size: 19px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.group h3 span { font-family: var(--body); font-weight: 400; font-size: 12.5px; color: var(--rail-muted); text-align: right; }
+.lane { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: start; margin-bottom: 6px; }
+.lane > i { font-style: normal; font-size: 12.5px; color: var(--rail-muted); padding-top: 9px; }
+.bays { display: flex; gap: 6px; flex-wrap: wrap; }
+.bay { flex: 1 1 84px; min-width: 84px; background: var(--rail-2); border-left: 5px solid var(--rail-muted); padding: 5px 8px 6px; font-size: 13.5px; font-weight: 500; line-height: 1.25; transition: border-color .3s, background-color .3s; }
+.bay small { display: block; font-weight: 400; font-size: 12px; color: var(--rail-muted); }
+.bay.ok { border-left-color: var(--ok); }
+.bay.primary { border-left-color: var(--mark); }
+.bay.primary small { color: var(--mark); }
+.bay.bad { border-left-color: var(--bad); background: #3A2230; }
+.bay.bad small { color: #F0A193; }
+.pending { font-size: 12.5px; color: var(--rail-muted); margin: 4px 0 0 42px; }
+.pending.hot { color: var(--mark); font-weight: 600; }
+.log { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+.log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid #25344E; }
+.log time { color: var(--rail-muted); font-variant-numeric: tabular-nums; }
+.log .bad { color: #F4A99C; } .log .ok { color: #8FD9AC; }
+.textbtn { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; cursor: pointer; font-size: inherit; }
+.linkbtn { background: none; border: 0; color: var(--rail-muted); text-decoration: underline; cursor: pointer; font-size: 12.5px; padding: 0; }
+
+/* ---------- entrada ---------- */
+.login { max-width: 420px; margin: 9vh auto; background: var(--paper); border: 1px solid var(--line); border-top: 6px solid var(--mark); padding: 28px 30px 30px; }
+.login form { display: grid; gap: 14px; margin-top: 18px; }
+.login .accounts { margin-top: 20px; font-size: 14px; color: var(--muted); }
+.login .accounts button { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; cursor: pointer; }
+
+#toasts { position: fixed; left: 20px; bottom: 20px; display: grid; gap: 8px; z-index: 9; max-width: min(480px, calc(100vw - 40px)); }
+.toast { background: var(--ink); color: #fff; padding: 10px 14px; border-left: 5px solid var(--mark); font-size: 14.5px; }
+
+@media (max-width: 1080px) { .shell { grid-template-columns: 1fr; } .pair { grid-template-columns: 1fr; } .rail { position: static; height: auto; } }
+@media (prefers-reduced-motion: reduce) { .bay { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="login" class="login" hidden>
+  <div class="brand">OptiWare</div>
+  <p class="lede" style="margin:0">Gestão dos armazéns da empresa.</p>
+  <form id="loginForm">
+    <label>Utilizador <input name="username" autocomplete="username" required></label>
+    <label>Palavra-passe <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn">Entrar</button>
+    <div id="loginMsg" class="msg bad" hidden></div>
+  </form>
+  <p class="accounts">Contas de demonstração:
+    <button data-u="operador" data-p="operador123">operador</button>,
+    <button data-u="admin" data-p="admin123">admin</button>,
+    <button data-u="consulta" data-p="consulta123">consulta</button> (só leitura).</p>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand">OptiWare</div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Vistas"></nav>
+    <div class="who"><span>Sessão de <b id="whoName"></b> (<span id="whoRole"></span>)</span><button class="btn alt small" id="logout">Sair</button></div>
+  </header>
+  <div class="shell">
+    <main id="main"></main>
+    <aside class="rail" aria-label="Infraestrutura">
+      <h2>Infraestrutura, agora</h2>
+      <p class="lede">Cada caixa é um contentor. Pára um e vê o que acontece aqui e nos ecrãs ao lado.</p>
+      <div id="infra"></div>
+      <div class="group">
+        <h3>Registo de eventos <button class="linkbtn" id="clearLog">limpar</button></h3>
+        <ul class="log" id="log"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================================================
+   OptiWare: interface web (um único ficheiro, sem dependências nem passo de build).
+   É servida pelos DOIS nginx do gateway (porta 8000) e fala com as APIs na mesma origem:
+     /api/central/...   serviços centrais (empresa)        -> upstream central (2 instâncias)
+     /api/<armazém>/... serviço de cada armazém            -> upstream whN     (2 instâncias)
+     /node/<nome>/stats estado de UMA instância concreta   -> só para o painel de infraestrutura
+   ===================================================================================================== */
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hhmmss = (d) => new Date(d).toLocaleTimeString('pt-PT');
+const n = (v) => Number(v ?? 0).toLocaleString('pt-PT', { maximumFractionDigits: 1 });
+// crypto.randomUUID só existe em localhost/HTTPS; isto funciona também quando se abre por IP na rede local.
+const uuid = () => {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
+const shortId = (p) => `${p}-${uuid().slice(0, 8)}`;
+const store = {
+  get(k, where = localStorage) { try { return JSON.parse(where.getItem(k)); } catch (_) { return null; } },
+  set(k, v, where = localStorage) { try { where.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  del(k, where = localStorage) { try { where.removeItem(k); } catch (_) {} },
+};
+/** Só mexe no DOM quando o HTML muda: evita piscar e não apaga o que o utilizador está a escrever. */
+const painted = new WeakMap();
+function paint(el, html) { if (el && painted.get(el) !== html) { el.innerHTML = html; painted.set(el, html); } }
+function toast(text, ms = 6000) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = text;
+  $('#toasts').append(t); setTimeout(() => t.remove(), ms);
+}
+
+// ---------------------------------------------------------------- sessão
+let session = store.get('optiware.session', sessionStorage);     // { token, role, user }
+const canOperate = () => session && ['operator', 'admin'].includes(session.role);
+const ROLE = { admin: 'administrador', operator: 'operador', viewer: 'consulta' };
+
+// ---------------------------------------------------------------- chamadas às APIs
+const lastServed = {};   // serviço -> { instance, gateway, at } (quem respondeu ao último pedido "normal")
+const gatewaySeen = {};  // nginx   -> instante da última resposta
+let lastAnyResponse = 0;
+
+function seen(r, svc) {
+  const gw = r.headers.get('X-Gateway');
+  lastAnyResponse = Date.now();
+  if (gw) gatewaySeen[gw] = Date.now();
+  const inst = r.headers.get('X-Served-By');
+  if (svc && inst) lastServed[svc] = { instance: inst, gateway: gw, at: Date.now() };
+}
+function explain(e) {
+  if (e.name === 'TimeoutError' || e.name === 'AbortError') return 'tempo de resposta esgotado';
+  if (e instanceof TypeError) return 'sem ligação ao servidor';
+  return e.message;
+}
+async function call(svc, path, { method = 'GET', body, timeout = 8000 } = {}) {
+  const headers = {};
+  if (session) headers.Authorization = `Bearer ${session.token}`;
+  if (body) headers['content-type'] = 'application/json';
+  const r = await fetch(`/api/${svc}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout), cache: 'no-store' });
+  seen(r, svc);
+  const data = await r.json().catch(() => null);
+  if (r.status === 401 && session && path !== '/auth/login') { logout('A sessão expirou. Entra de novo.'); }
+  if (!r.ok) throw Object.assign(new Error((data && data.error) || `erro HTTP ${r.status}`), { status: r.status, details: data && data.details });
+  return data;
+}
+/**
+ * Escritas: se não houver resposta (instância ou BD a falhar), repete o MESMO pedido com o MESMO id.
+ * É seguro porque todas as operações são idempotentes no servidor: o pedido repetido não duplica nada.
+ */
+async function send(svc, path, body) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call(svc, path, { method: 'POST', body, timeout: 45000 });
+    } catch (e) {
+      const retriable = !e.status || [502, 503, 504].includes(e.status);
+      if (!retriable || attempt === 3) throw Object.assign(e, { message: explain(e) });
+      toast(`Sem resposta (${explain(e)}). A repetir o mesmo pedido, com o mesmo id: tentativa ${attempt + 1} de 3.`);
+      await sleep(1500);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- topologia e separadores
+let topology = { gateways: [], services: { central: [] } };
+let whNames = store.get('optiware.whNames') || {};        // id -> nome (guardado para funcionar com o central em baixo)
+let active = 'empresa';
+const whIds = () => Object.keys(topology.services).filter((s) => s !== 'central');
+const whName = (id) => whNames[id] || id;
+
+function renderTabs() {
+  const tab = (id, label, extra = '') => `<button class="tab" role="tab" data-tab="${esc(id)}" aria-selected="${active === id}">${label}${extra}</button>`;
+  paint($('#tabs'), tab('empresa', 'Empresa') + whIds().map((id) => tab(id, esc(whName(id)), `<small>${esc(id)}</small>`)).join(''));
+}
+$('#tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]');
+  if (!b) return;
+  active = b.dataset.tab; renderTabs(); mountView();
+});
+
+// ---------------------------------------------------------------- vistas
+let viewTimer = null;
+let viewGen = 0;
+function mountView() {
+  clearInterval(viewTimer);
+  const gen = ++viewGen;
+  const main = $('#main');
+  const view = active === 'empresa' ? empresaView(main) : warehouseView(main, active);
+  let inFlight = false;   // nunca sobrepõe atualizações: um pedido preso (failover) não acumula ligações
+  const tick = async () => {
+    if (gen !== viewGen || inFlight) return;
+    inFlight = true;
+    try { await view.refresh(); } catch (_) {} finally { inFlight = false; }
+  };
+  tick();
+  viewTimer = setInterval(tick, 2500);
+}
+const readOnlyNote = '<p class="note">O perfil de consulta só pode ver. Entra como operador para fazer alterações.</p>';
+const productOptions = (list) => '<option value="">Escolhe um produto</option>' + list.map((p) => `<option value="${esc(p.sku)}">${esc(p.sku)}: ${esc(p.name)}</option>`).join('');
+function setOptions(sel, html) { if (sel && painted.get(sel) !== html) { const v = sel.value; sel.innerHTML = html; if (v) sel.value = v; painted.set(sel, html); } }
+function showMsg(el, kind, html) { el.className = `msg ${kind}`; el.innerHTML = html; el.hidden = false; }
+async function busy(form, msg, fn) {
+  const btns = [...form.querySelectorAll('button')];
+  btns.forEach((b) => (b.disabled = true));
+  // se a resposta demorar (por exemplo, BD a mudar de nó), diz-se o que se passa em vez de deixar o ecrã parado
+  const slow = setTimeout(() => showMsg(msg, '', 'À espera da resposta. Se uma base de dados estiver a mudar de nó, demora alguns segundos; o pedido não se perde.'), 1200);
+  try { await fn(); } finally { clearTimeout(slow); btns.forEach((b) => (b.disabled = false)); }
+}
+
+const T_STATUS = { REQUESTED: ['Pedida', 'b-wait'], IN_TRANSIT: ['Em trânsito', 'b-warn'], COMPLETED: ['Concluída', 'b-ok'], REJECTED: ['Rejeitada', 'b-bad'] };
+const O_STATUS = { RESERVED: ['Reservada', 'b-warn'], FULFILLED: ['Expedida', 'b-ok'], CANCELLED: ['Cancelada', 'b-wait'] };
+const M_TYPE = { IN: 'Entrada', OUT: 'Saída', TRANSFER_OUT: 'Saída por transferência', TRANSFER_IN: 'Entrada por transferência' };
+const badge = (map, s) => `<span class="badge ${(map[s] || [s, 'b-wait'])[1]}">${esc((map[s] || [s])[0])}</span>`;
+
+// ---- Empresa: visão global e transferências (serviços centrais)
+function empresaView(main) {
+  main.innerHTML = `
+    <h1>Empresa</h1>
+    <p class="lede" id="eLede">Stock de todos os armazéns e transferências entre eles.</p>
+    <div id="eDown" class="banner" hidden><b>Os serviços centrais não respondem.</b>Sem visão global nem transferências novas. Cada armazém continua a funcionar sozinho: abre o separador de um armazém e confirma.</div>
+    <div id="eSlow" class="banner warn" hidden><b>A base de dados da empresa está a mudar de nó.</b>Os pedidos ficam à espera alguns segundos e depois continuam. Os armazéns não são afetados.</div>
+    <section class="block"><h2>Armazéns</h2><div class="scroll" id="eWh"></div></section>
+    <section class="block"><h2>Stock em todos os armazéns</h2><div class="scroll" id="eStock"></div></section>
+    <section class="block"><h2>Transferir entre armazéns</h2>
+      ${canOperate() ? `<form class="row" id="tForm">
+        <label>De <select name="from" required></select></label>
+        <label>Para <select name="to" required></select></label>
+        <label>Produto <select name="sku" required></select></label>
+        <label>Quantidade <input name="qty" type="number" min="1" step="1" value="10" required></label>
+        <button class="btn">Pedir transferência</button>
+      </form><div id="tMsg" class="msg" hidden></div>
+      <p class="note">O pedido fica gravado na empresa e segue por mensagens. Se um armazém ou o serviço de mensagens estiver em baixo, a transferência fica pendente e conclui sozinha quando voltar.</p>` : readOnlyNote}
+    </section>
+    <section class="block"><h2>Transferências</h2><div class="scroll" id="eTransfers"></div></section>`;
+
+  const form = $('#tForm', main);
+  if (form) form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const body = { id: uuid(), from: f.get('from'), to: f.get('to'), sku: f.get('sku'), qty: Number(f.get('qty')) };
+    const msg = $('#tMsg', main);
+    if (body.from === body.to) return showMsg(msg, 'bad', 'A origem e o destino têm de ser armazéns diferentes.');
+    busy(form, msg, async () => {
+      try {
+        await send('central', '/transfers', body);
+        showMsg(msg, 'ok', `Transferência pedida: ${n(body.qty)} × ${esc(body.sku)} de ${esc(whName(body.from))} para ${esc(whName(body.to))}. Acompanha o estado na lista abaixo.`);
+        refresh().catch(() => {});
+      } catch (err) { showMsg(msg, 'bad', `A transferência não foi pedida: ${esc(err.message)}.`); }
+    });
+  });
+
+  async function refresh() {
+    let whs, stock, transfers;
+    try {
+      whs = await call('central', '/warehouses', { timeout: 6000 });
+      stock = await call('central', '/stock', { timeout: 9000 });
+      transfers = await call('central', '/transfers', { timeout: 6000 });
+    } catch (e) {
+      if (e.status && e.status < 500) throw e;
+      const dbMoving = monitor.dbMoving('central');
+      $('#eSlow', main).hidden = !dbMoving; $('#eDown', main).hidden = dbMoving;
+      return;
+    }
+    $('#eDown', main).hidden = true; $('#eSlow', main).hidden = true;
+    whs.forEach((w) => (whNames[w.id] = w.name));
+    store.set('optiware.whNames', whNames); renderTabs();
+
+    const upCount = whs.filter((w) => w.status === 'UP').length;
+    $('#eLede', main).textContent = `${whs.length} armazéns registados, ${upCount} a responder. Stock de todos e transferências entre eles.`;
+    const byWh = Object.fromEntries(stock.warehouses.map((w) => [w.warehouse, w]));
+    const dataState = (w) => !w ? '' : w.state === 'live' ? '<span class="badge b-ok">ao vivo</span>'
+      : w.state === 'stale' ? `<span class="badge b-warn">último estado conhecido, ${hhmmss(w.asOf)}</span>` : '<span class="badge b-bad">sem dados</span>';
+    paint($('#eWh', main), `<table><thead><tr><th>Armazém</th><th>Ligação à empresa</th><th>Dados de stock mostrados</th><th>Último sinal</th></tr></thead><tbody>${whs.map((w) => `
+      <tr><td class="sku">${esc(w.name)}<span class="sub">${esc(w.id)}</span></td>
+      <td>${w.status === 'UP' ? '<span class="badge b-ok">a responder</span>' : '<span class="badge b-bad">sem sinal</span>'}</td>
+      <td>${dataState(byWh[w.id])}</td><td>${hhmmss(w.last_seen)}</td></tr>`).join('')}</tbody></table>`);
+
+    const skus = stock.totals.slice().sort((a, b) => a.sku.localeCompare(b.sku));
+    const cell = (w, sku) => { const i = w && w.items.find((x) => x.sku === sku); return i ? `${n(i.available)}<span class="sub">de ${n(i.total)}</span>` : '<span class="sub">0</span>'; };
+    paint($('#eStock', main), skus.length ? `<table><thead><tr><th>Produto</th>${whs.map((w) => `<th class="num">${esc(w.name)}</th>`).join('')}<th class="num">Disponível na empresa</th></tr></thead><tbody>${skus.map((t) => `
+      <tr><td class="sku">${esc(t.sku)}<span class="sub">${esc(t.name)}</span></td>${whs.map((w) => `<td class="num">${cell(byWh[w.id], t.sku)}</td>`).join('')}
+      <td class="num"><b>${n(t.available)}</b><span class="sub">de ${n(t.total)}</span></td></tr>`).join('')}</tbody></table>
+      <p class="note">Disponível = existente menos o que está reservado para encomendas.</p>` : '<p class="empty">Ainda não há stock em nenhum armazém.</p>');
+
+    paint($('#eTransfers', main), transfers.length ? `<table><thead><tr><th>Pedido</th><th>Percurso</th><th>Produto</th><th class="num">Quantidade</th><th>Estado</th><th>Atualizado</th></tr></thead><tbody>${transfers.slice(0, 15).map((t) => `
+      <tr><td>${esc(t.id.slice(0, 8))}</td><td>${esc(whName(t.from_wh))} para ${esc(whName(t.to_wh))}</td><td class="sku">${esc(t.sku)}</td><td class="num">${n(t.qty)}</td>
+      <td>${badge(T_STATUS, t.status)}${t.reason ? `<span class="sub">${esc(t.reason)}</span>` : ''}</td><td>${hhmmss(t.updated_at)}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="empty">Ainda não há transferências. Pede a primeira no formulário acima.</p>');
+
+    if (form) {
+      const whOpts = whs.map((w) => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
+      const first = !painted.get(form.elements.from);
+      setOptions(form.elements.from, whOpts); setOptions(form.elements.to, whOpts);
+      if (first && whs[1]) form.elements.to.value = whs[1].id;
+      setOptions(form.elements.sku, productOptions(skus));
+    }
+  }
+  return { refresh };
+}
+
+// ---- Armazém: stock, receção com proposta do CSP, encomendas (serviço e BD próprios do armazém)
+function warehouseView(main, id) {
+  const ops = canOperate();
+  main.innerHTML = `
+    <h1>${esc(whName(id))}</h1>
+    <p class="lede">Este armazém tem serviço e base de dados próprios. Funciona mesmo que a empresa ou os outros armazéns estejam em baixo.</p>
+    <div id="wDown" class="banner" hidden><b>Este armazém não responde.</b>Os outros armazéns e a empresa continuam a funcionar. A visão da empresa mostra o último stock conhecido deste armazém.</div>
+    <div id="wSlow" class="banner warn" hidden><b>A base de dados deste armazém está a mudar de nó.</b>As operações ficam à espera alguns segundos e depois continuam.</div>
+    <section class="block"><h2>Stock por prateleira</h2><div class="scroll" id="wStock"></div></section>
+    <div class="pair">
+      <section class="block"><h2>Receber mercadoria</h2>
+        ${ops ? `<form class="row" id="rForm">
+          <label>Produto <select name="sku" required></select></label>
+          <label>Quantidade <input name="qty" type="number" min="1" step="1" value="10" required></label>
+          <button class="btn">Propor prateleira</button>
+        </form><div id="rMsg" class="msg" hidden></div>
+        <p class="note">O sistema propõe uma prateleira que respeita categoria, zona, peso e volume. Só grava depois de confirmares.</p>` : readOnlyNote}
+      </section>
+      <section class="block"><h2>Nova encomenda</h2>
+        ${ops ? `<form class="row" id="oForm">
+          <label>Produto <select name="sku" required></select></label>
+          <label>Quantidade <input name="qty" type="number" min="1" step="1" value="5" required></label>
+          <button class="btn">Reservar stock</button>
+        </form><div id="oMsg" class="msg" hidden></div>
+        <p class="note">A reserva nunca ultrapassa o stock disponível, mesmo com pedidos em simultâneo.
+          <button type="button" class="textbtn" id="oBurst">Testar: enviar 20 pedidos iguais ao mesmo tempo</button></p>` : readOnlyNote}
+      </section>
+    </div>
+    <section class="block"><h2>Encomendas</h2><div class="scroll" id="wOrders"></div></section>
+    <div class="pair">
+      <section class="block"><h2>Prateleiras</h2><div class="scroll" id="wShelves"></div></section>
+      <section class="block"><h2>Últimos movimentos</h2><div class="scroll" id="wMoves"></div></section>
+    </div>`;
+
+  const rForm = $('#rForm', main), oForm = $('#oForm', main);
+  if (rForm) rForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = new FormData(rForm);
+    const item = { sku: f.get('sku'), qty: Number(f.get('qty')) };
+    const msg = $('#rMsg', main);
+    busy(rForm, msg, async () => {
+      try {
+        const p = await send(id, '/allocate', { items: [item] });
+        if (!p.feasible) return showMsg(msg, 'warn', `Nenhuma prateleira cumpre as restrições para ${n(item.qty)} × ${esc(item.sku)} (categoria, zona, peso ou volume livre). Experimenta uma quantidade menor.`);
+        const a = p.assignments[0];
+        const receipt = shortId('rec');   // o id nasce aqui: confirmar duas vezes não duplica a entrada
+        showMsg(msg, 'ok', `Proposta: ${n(a.qty)} × ${esc(a.sku)} na prateleira <b>${esc(a.shelf)}</b>.<br><button class="btn" type="button" id="rConfirm">Confirmar arrumação</button>`);
+        $('#rConfirm', main).addEventListener('click', async (ev) => {
+          ev.target.disabled = true;
+          try {
+            const r = await send(id, '/putaway', { id: receipt, assignments: [{ sku: a.sku, qty: a.qty, shelfId: a.shelfId }] });
+            showMsg(msg, 'ok', r.duplicate ? `Esta receção (${esc(receipt)}) já estava gravada. Não foi duplicada.` : `Arrumado: ${n(a.qty)} × ${esc(a.sku)} na prateleira ${esc(a.shelf)} (receção ${esc(receipt)}).`);
+            refresh().catch(() => {});
+          } catch (err) {
+            showMsg(msg, 'bad', `Não foi gravado: ${esc(err.message)}.${err.details ? `<ul>${err.details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}`);
+          }
+        });
+      } catch (err) { showMsg(msg, 'bad', `Sem proposta: ${esc(err.message)}.`); }
+    });
+  });
+  if (oForm) oForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = new FormData(oForm);
+    const body = { id: shortId('enc'), sku: f.get('sku'), qty: Number(f.get('qty')) };
+    const msg = $('#oMsg', main);
+    busy(oForm, msg, async () => {
+      try {
+        await send(id, '/orders', body);
+        showMsg(msg, 'ok', `Encomenda ${esc(body.id)} reservada: ${n(body.qty)} × ${esc(body.sku)}.`);
+        refresh().catch(() => {});
+      } catch (err) { showMsg(msg, 'bad', `A encomenda não foi criada: ${esc(err.message)}.`); }
+    });
+  });
+  // Demonstração de concorrência: 20 encomendas iguais em simultâneo, repartidas pelas duas instâncias do armazém.
+  if (oForm) $('#oBurst', main).addEventListener('click', async (e) => {
+    const f = new FormData(oForm);
+    const sku = f.get('sku'), qty = Number(f.get('qty')), msg = $('#oMsg', main);
+    if (!sku || !(qty > 0)) return showMsg(msg, 'warn', 'Escolhe primeiro um produto e uma quantidade.');
+    e.target.disabled = true;
+    const run = uuid().slice(0, 6);
+    const rs = await Promise.all(Array.from({ length: 20 }, (_, i) =>
+      call(id, '/orders', { method: 'POST', body: { id: `sim-${run}-${i + 1}`, sku, qty }, timeout: 30000 }).then(() => 'ok', (err) => (err.status === 409 ? 'sem' : 'erro'))));
+    const count = (k) => rs.filter((x) => x === k).length;
+    let tail = '';
+    try {
+      const st = await call(id, `/stock?sku=${encodeURIComponent(sku)}`);
+      tail = ` Reservado agora: ${n(st.reduce((a, r) => a + r.reserved, 0))} de ${n(st.reduce((a, r) => a + r.qty, 0))} existentes.`;
+    } catch (_) {}
+    showMsg(msg, count('erro') ? 'warn' : 'ok', `20 pedidos em simultâneo de ${n(qty)} × ${esc(sku)}: ${count('ok')} aceites, ${count('sem')} recusados por falta de stock${count('erro') ? `, ${count('erro')} sem resposta` : ''}.${tail}`);
+    e.target.disabled = false;
+    refresh().catch(() => {});
+  });
+  main.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-order]');
+    if (!b) return;
+    b.disabled = true;
+    try {
+      await send(id, `/orders/${encodeURIComponent(b.dataset.order)}/${b.dataset.act}`);
+      toast(`Encomenda ${b.dataset.order} ${b.dataset.act === 'fulfill' ? 'expedida' : 'cancelada'}.`, 3500);
+      refresh().catch(() => {});
+    } catch (err) { toast(`A encomenda ${b.dataset.order} não foi alterada: ${err.message}.`); b.disabled = false; }
+  });
+
+  async function refresh() {
+    let stock, orders, shelves, moves, products;
+    try {
+      const get = (path) => call(id, path, { timeout: 6000 });
+      stock = await get('/stock'); orders = await get('/orders'); shelves = await get('/shelves'); moves = await get('/movements?limit=10'); products = await get('/products');
+    } catch (e) {
+      if (e.status && e.status < 500) throw e;
+      const dbMoving = monitor.dbMoving(id);
+      $('#wSlow', main).hidden = !dbMoving; $('#wDown', main).hidden = dbMoving;
+      return;
+    }
+    $('#wDown', main).hidden = true; $('#wSlow', main).hidden = true;
+
+    paint($('#wStock', main), stock.length ? `<table><thead><tr><th>Produto</th><th>Prateleira</th><th class="num">Existente</th><th class="num">Reservado</th><th class="num">Disponível</th></tr></thead><tbody>${stock.map((s) => `
+      <tr><td class="sku">${esc(s.sku)}<span class="sub">${esc(s.name)}</span></td><td>${esc(s.shelf)}</td><td class="num">${n(s.qty)}</td><td class="num">${n(s.reserved)}</td><td class="num"><b>${n(s.available)}</b></td></tr>`).join('')}</tbody></table>`
+      : '<p class="empty">Este armazém ainda não tem stock. Recebe mercadoria abaixo ou pede uma transferência no separador Empresa.</p>');
+
+    paint($('#wOrders', main), orders.length ? `<table><thead><tr><th>Encomenda</th><th>Produto</th><th class="num">Quantidade</th><th>Estado</th><th>Criada</th><th></th></tr></thead><tbody>${orders.slice(0, 12).map((o) => `
+      <tr><td>${esc(o.id)}</td><td class="sku">${esc(o.sku)}</td><td class="num">${n(o.qty)}</td><td>${badge(O_STATUS, o.status)}</td><td>${hhmmss(o.created_at)}</td>
+      <td>${ops && o.status === 'RESERVED' ? `<button class="btn small" data-order="${esc(o.id)}" data-act="fulfill">Expedir</button> <button class="btn alt small" data-order="${esc(o.id)}" data-act="cancel">Cancelar</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="empty">Ainda não há encomendas neste armazém.</p>');
+
+    paint($('#wShelves', main), `<table><thead><tr><th>Prateleira</th><th>Zona</th><th>Aceita</th><th class="num">Peso livre</th><th class="num">Volume livre</th></tr></thead><tbody>${shelves.map((s) => `
+      <tr><td class="sku">${esc(s.code)}</td><td>${s.zone === 'RECEIVING' ? 'receção' : esc(s.zone)}</td><td>${s.allowedCategories.length ? esc(s.allowedCategories.join(', ')) : 'tudo'}</td>
+      <td class="num">${n(s.freeWeight)} kg</td><td class="num">${n(s.freeVolume)} L</td></tr>`).join('')}</tbody></table>`);
+
+    paint($('#wMoves', main), moves.length ? `<table><thead><tr><th>Hora</th><th>Movimento</th><th>Produto</th><th class="num">Quantidade</th></tr></thead><tbody>${moves.map((m) => `
+      <tr><td>${hhmmss(m.created_at)}</td><td>${esc(M_TYPE[m.type] || m.type)}</td><td class="sku">${esc(m.sku)}</td><td class="num">${n(m.qty)}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="empty">Sem movimentos ainda.</p>');
+
+    const opts = productOptions(products);
+    if (rForm) setOptions(rForm.elements.sku, opts);
+    if (oForm) setOptions(oForm.elements.sku, opts);
+  }
+  return { refresh };
+}
+
+// ---------------------------------------------------------------- painel de infraestrutura
+const monitor = (() => {
+  const node = {};      // instância -> { up, fails, stats }
+  const role = {};      // nó de BD  -> { role, cand, count }
+  const broker = {};    // nó RabbitMQ -> { up, cand, count }
+  const gateway = {};   // nginx -> up
+  const events = [];
+  let started = false;
+
+  function log(kind, text) {
+    events.unshift({ at: Date.now(), kind, text });
+    events.length = Math.min(events.length, 40);
+    paint($('#log'), events.map((e) => `<li><time>${hhmmss(e.at)}</time><span class="${e.kind}">${esc(e.text)}</span></li>`).join(''));
+  }
+  /** Só aceita uma mudança de estado vista em 2 ciclos seguidos (evita falsos alarmes). */
+  function settle(map, key, value) {
+    const s = map[key] || (map[key] = { value: undefined, cand: value, count: 0 });
+    if (s.value === undefined) { s.value = value; return null; }
+    if (value === s.value) { s.cand = value; s.count = 0; return null; }
+    if (value === s.cand) s.count++; else { s.cand = value; s.count = 1; }
+    if (s.count < 2) return null;
+    const before = s.value; s.value = value; s.count = 0;
+    return { before, after: value };
+  }
+  const svcLabel = (svc) => (svc === 'central' ? 'a empresa' : `o ${whName(svc)}`);   // «servir a empresa», «servir o Armazém Lisboa»
+  const svcOf = (svc) => (svc === 'central' ? 'da empresa' : `do ${whName(svc)}`);
+
+  async function probe(name) {
+    try {
+      const r = await fetch(`/node/${name}/stats`, { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+      seen(r);
+      return r.ok ? await r.json() : null;
+    } catch (_) { return null; }
+  }
+
+  async function cycle() {
+    const services = topology.services;
+    const names = Object.values(services).flat();
+    const results = await Promise.all(names.map(probe));
+    const changed = [];
+    names.forEach((name, i) => {
+      const s = node[name] || (node[name] = { up: null, fails: 0, stats: null });
+      const svc = Object.keys(services).find((k) => services[k].includes(name));
+      if (results[i]) {
+        if (s.up === false) changed.push({ name, svc, up: true });
+        s.up = true; s.fails = 0; s.stats = results[i];
+        if (results[i].name && svc !== 'central') whNames[svc] = whNames[svc] || results[i].name;
+      } else if (++s.fails >= 2 || s.up === null) {
+        if (s.up === true) changed.push({ name, svc, up: false });
+        s.up = false;
+      }
+    });
+    // só depois de ver todas as instâncias é que se descreve o que mudou (duas podem cair no mesmo ciclo)
+    for (const c of changed) {
+      const alive = services[c.svc].filter((x) => node[x] && node[x].up);
+      if (c.up) log('ok', alive.length === services[c.svc].length ? `${c.name} voltou a responder. Há outra vez ${alive.length} instâncias a servir ${svcLabel(c.svc)}.` : `${c.name} voltou a responder e já serve ${svcLabel(c.svc)}.`);
+      else log('bad', alive.length ? `${c.name} deixou de responder. ${alive.join(', ')} continua a servir ${svcLabel(c.svc)} no mesmo endereço.` : `${c.name} deixou de responder. Não resta nenhuma instância a servir ${svcLabel(c.svc)}.`);
+    }
+
+    // bases de dados: papel de cada nó, visto por uma instância viva de cada serviço
+    for (const svc of Object.keys(services)) {
+      const alive = services[svc].map((x) => node[x]).find((x) => x && x.up && x.stats);
+      if (!alive) continue;
+      for (const d of alive.stats.dbNodes || []) {
+        const ch = settle(role, d.host, d.role);
+        if (!ch || !started) continue;
+        const t = `${ch.before}>${ch.after}`;
+        if (t === 'primary>down') log('bad', `${d.host} (BD primária ${svcOf(svc)}) deixou de responder. As escritas esperam pela promoção do standby.`);
+        else if (t === 'standby>primary') log('ok', `${d.host} foi promovida a primária. As escritas ${svcOf(svc)} continuam.`);
+        else if (t === 'down>standby') log('ok', `${d.host} voltou e juntou-se como standby. A BD ${svcOf(svc)} tem outra vez réplica.`);
+        else if (t === 'standby>down') log('bad', `${d.host} (standby ${svcOf(svc)}) deixou de responder. A BD continua a funcionar, sem réplica.`);
+        else if (t === 'down>primary') log('ok', `${d.host} voltou como primária ${svcOf(svc)}.`);
+        else log('', `${d.host}: ${ROLE_DB[ch.before]} passou a ${ROLE_DB[ch.after]}.`);
+      }
+    }
+    // serviço de mensagens: nós que aceitam ligações
+    const anyAlive = names.map((x) => node[x]).find((x) => x && x.up && x.stats && x.stats.brokerNodes);
+    if (anyAlive) for (const b of anyAlive.stats.brokerNodes) {
+      const ch = settle(broker, b.host, b.up);
+      if (!ch || !started) continue;
+      const upNow = Object.values(broker).filter((x) => x.value).length, total = Object.keys(broker).length;
+      if (!ch.after) log('bad', upNow * 2 > total ? `${b.host} deixou de responder. Restam ${upNow} de ${total} nós: há maioria, as mensagens continuam a circular.` : `${b.host} deixou de responder. Restam ${upNow} de ${total} nós: sem maioria, as mensagens ficam guardadas até voltar.`);
+      else log('ok', `${b.host} voltou ao cluster de mensagens (${upNow} de ${total} nós).`);
+    }
+    // os dois nginx partilham o endereço: vê-se quem está vivo por quem responde
+    for (const g of topology.gateways) {
+      const upNow = Date.now() - (gatewaySeen[g] || 0) < 5000;
+      const fresh = Date.now() - lastAnyResponse < 2500;
+      if (gateway[g] === undefined) { gateway[g] = upNow; continue; }
+      if (gateway[g] && !upNow && fresh) { gateway[g] = false; log('bad', `${g} deixou de responder. O outro nginx continua a receber tudo no mesmo endereço.`); }
+      else if (!gateway[g] && upNow) { gateway[g] = true; if (started) log('ok', `${g} voltou. A entrada tem outra vez dois nginx.`); }
+    }
+    if (!started) { started = true; log('', 'Monitorização iniciada.'); }
+    render(); renderTabs();
+  }
+
+  const ROLE_DB = { primary: 'primária', standby: 'standby', down: 'sem resposta' };
+  const bay = (cls, name, sub) => `<div class="bay ${cls}">${esc(name)}<small>${esc(sub)}</small></div>`;
+  function render() {
+    const services = topology.services;
+    let html = `<div class="group"><h3>Entrada <span>um endereço, dois nginx</span></h3><div class="lane"><i>nginx</i><div class="bays">${
+      topology.gateways.map((g) => bay(gateway[g] ? 'ok' : gateway[g] === false ? 'bad' : '', g, gateway[g] ? 'a responder' : gateway[g] === false ? 'sem resposta' : 'a verificar')).join('')}</div></div></div>`;
+    for (const svc of Object.keys(services)) {
+      const ls = lastServed[svc];
+      const stats = services[svc].map((x) => node[x]).find((x) => x && x.up && x.stats);
+      const dbs = stats ? stats.stats.dbNodes : [];
+      const pending = stats ? stats.stats.outboxPending : null;
+      html += `<div class="group"><h3>${svc === 'central' ? 'Empresa' : esc(whName(svc))} <span>${ls && Date.now() - ls.at < 15000 ? `última resposta: ${esc(ls.instance)}` : ''}</span></h3>
+        <div class="lane"><i>API</i><div class="bays">${services[svc].map((x) => {
+          const s = node[x];
+          return bay(s && s.up ? 'ok' : s && s.up === false ? 'bad' : '', x, s && s.up ? (s.stats.brokerNode ? `mensagens via ${s.stats.brokerNode}` : 'sem ligação às mensagens') : s && s.up === false ? 'sem resposta' : 'a verificar');
+        }).join('')}</div></div>
+        <div class="lane"><i>BD</i><div class="bays">${dbs.length ? dbs.map((d) => { const r = (role[d.host] && role[d.host].value) || d.role; return bay(r === 'primary' ? 'primary' : r === 'standby' ? 'ok' : 'bad', d.host, ROLE_DB[r]); }).join('') : bay('', 'base de dados', 'sem informação: as instâncias deste serviço não respondem')}</div></div>
+        ${pending == null ? '' : `<p class="pending ${pending > 0 ? 'hot' : ''}">${pending > 0 ? (pending === 1 ? '1 mensagem guardada à espera de envio' : `${pending} mensagens guardadas à espera de envio`) : 'sem mensagens por enviar'}</p>`}</div>`;
+    }
+    const bn = Object.keys(broker);
+    html += `<div class="group"><h3>Mensagens <span>RabbitMQ, ${bn.length || 3} nós</span></h3><div class="lane"><i>nó</i><div class="bays">${
+      bn.length ? bn.map((b) => bay(broker[b].value ? 'ok' : 'bad', b, broker[b].value ? 'a responder' : 'sem resposta')).join('') : bay('', 'cluster', 'a verificar')}</div></div></div>`;
+    paint($('#infra'), html);
+  }
+  $('#clearLog').addEventListener('click', () => { events.length = 0; paint($('#log'), ''); });
+
+  let timer = null;
+  return {
+    start() { if (timer) return; let running = false; const run = async () => { if (running) return; running = true; try { await cycle(); } finally { running = false; } }; run(); timer = setInterval(run, 1500); },
+    /** Verdadeiro se as instâncias do serviço respondem mas a BD está sem primária (failover em curso). */
+    dbMoving(svc) {
+      const s = (topology.services[svc] || []).map((x) => node[x]).find((x) => x && x.up && x.stats);
+      return !!s && !(s.stats.dbNodes || []).some((d) => d.role === 'primary');
+    },
+  };
+})();
+
+// ---------------------------------------------------------------- entrada e saída
+function logout(message) {
+  session = null; store.del('optiware.session', sessionStorage);
+  clearInterval(viewTimer); viewGen++;
+  $('#app').hidden = true; $('#login').hidden = false;
+  const m = $('#loginMsg'); m.hidden = !message; m.textContent = message || '';
+}
+async function enter() {
+  $('#login').hidden = true; $('#app').hidden = false;
+  $('#whoName').textContent = session.user; $('#whoRole').textContent = ROLE[session.role] || session.role;
+  try {
+    const r = await fetch('/topology.json', { cache: 'no-store' }); seen(r);
+    topology = await r.json();
+  } catch (_) { toast('Não foi possível ler a topologia do gateway. O painel de infraestrutura fica vazio.'); }
+  renderTabs(); mountView(); monitor.start();
+}
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const m = $('#loginMsg'); m.hidden = true;
+  try {
+    const r = await call('central', '/auth/login', { method: 'POST', body: { username: f.get('username'), password: f.get('password') } });
+    session = { token: r.token, role: r.role, user: f.get('username') };
+    store.set('optiware.session', session, sessionStorage);
+    e.target.reset(); enter();
+  } catch (err) {
+    m.hidden = false;
+    m.textContent = err.status === 401 ? 'Utilizador ou palavra-passe errados.' : `Os serviços centrais não respondem (${explain(err)}), por isso não é possível iniciar sessão agora. Quem já tem sessão aberta continua a trabalhar nos armazéns.`;
+  }
+});
+$('.accounts').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-u]'); if (!b) return;
+  const f = $('#loginForm'); f.elements.username.value = b.dataset.u; f.elements.password.value = b.dataset.p; f.elements.username.focus();
+});
+$('#logout').addEventListener('click', () => logout());
+
+if (session) enter(); else logout();
+</script>
+</body>
+</html>
